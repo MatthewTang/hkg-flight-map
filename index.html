@@ -1,168 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <title>Flight Map from Hong Kong</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0e14" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-    <style>
-        * { box-sizing: border-box; }
-        html, body { margin: 0; height: 100%; background: #0b0e14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        #map { position: absolute; inset: 0; background: #0b0e14; }
-        .leaflet-container { background: #0b0e14 !important; }
-        .map-title {
-            position: absolute;
-            top: max(10px, env(safe-area-inset-top));
-            left: 56px;
-            right: 12px;
-            z-index: 1000;
-            background: rgba(15, 23, 42, 0.88);
-            backdrop-filter: blur(8px);
-            color: #fff;
-            padding: 10px 14px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.1);
-            pointer-events: none;
-        }
-        .map-title h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: #38bdf8; }
-        .map-title p { margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.35; }
-        .legend {
-            position: absolute;
-            bottom: max(28px, env(safe-area-inset-bottom));
-            left: 10px;
-            z-index: 1000;
-            background: rgba(15, 23, 42, 0.88);
-            color: #cbd5e1;
-            padding: 8px 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .legend div { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
-        .legend i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
-        .leaflet-control-zoom { margin-left: 10px !important; margin-top: max(10px, env(safe-area-inset-top)) !important; }
-        .leaflet-control-attribution { font-size: 10px !important; }
-    </style>
+  <meta charset="utf-8" />
+  <title>HKG Routes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e14" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map { margin: 0; height: 100%; background: #0b0e14; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    .leaflet-container { background: #0b0e14 !important; }
+    .hud {
+      position: absolute; z-index: 1000; left: 12px; right: 12px;
+      top: max(10px, env(safe-area-inset-top));
+      background: rgba(18,22,30,.9); color: #e8eef6; padding: 10px 14px;
+      border-radius: 12px; border: 1px solid #243044; pointer-events: none;
+    }
+    .hud h1 { margin: 0; font-size: 15px; }
+    .hud p { margin: 2px 0 0; font-size: 11px; color: #8b98ab; }
+    .apt { background: none !important; border: none !important; }
+    .apt span { font: 600 11px ui-monospace, SFMono-Regular, monospace; text-shadow: 0 0 6px #0b0e14; }
+  </style>
 </head>
 <body>
-<div class="map-title">
-    <h2>Flight Route Map (Jan–Sep 2026)</h2>
-    <p>HKG hub • thickness &amp; color = frequency</p>
-</div>
-<div class="legend">
-    <div><i style="background:#f43f5e;height:4px"></i> 5+ flights</div>
-    <div><i style="background:#fb923c;height:3px"></i> 3–4</div>
-    <div><i style="background:#facc15"></i> 2</div>
-    <div><i style="background:#38bdf8"></i> 1</div>
+<div class="hud">
+  <h1>Flight roster (Jan–Sep 2026)</h1>
+  <p>Pacific-centered — Americas sit east of HKG, same as Flightradar / GCMap</p>
 </div>
 <div id="map"></div>
 <script>
-    const HKG_LNG = 113.9185;
-    const HKG_LAT = 22.3080;
-
-    const map = L.map('map', {
-        center: [HKG_LAT, HKG_LNG],
-        zoom: 3,
-        minZoom: 2,
-        maxZoom: 8,
-        worldCopyJump: false
-    });
-
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri — source: Esri, HERE, Garmin',
-        maxZoom: 16,
-        noWrap: false
-    }).addTo(map);
-
-    const destinations = [
-        { code: "JFK", name: "New York (JFK)", lat: 40.6413, lng: -73.7781, count: 5 },
-        { code: "DEL", name: "Delhi (DEL)", lat: 28.5562, lng: 77.1000, count: 3 },
-        { code: "YYZ", name: "Toronto (YYZ)", lat: 43.6777, lng: -79.6248, count: 3 },
-        { code: "SFO", name: "San Francisco (SFO)", lat: 37.6213, lng: -122.3790, count: 3 },
-        { code: "YVR", name: "Vancouver (YVR)", lat: 49.1967, lng: -123.1815, count: 2 },
-        { code: "MAA", name: "Chennai (MAA)", lat: 12.9941, lng: 80.1709, count: 2 },
-        { code: "TPE", name: "Taipei (TPE)", lat: 25.0797, lng: 121.2342, count: 2 },
-        { code: "MEL", name: "Melbourne (MEL)", lat: -37.6690, lng: 144.8410, count: 1 },
-        { code: "PER", name: "Perth (PER)", lat: -31.9403, lng: 115.9669, count: 1 },
-        { code: "JNB", name: "Johannesburg (JNB)", lat: -26.1367, lng: 28.2411, count: 1 },
-        { code: "CTS", name: "Sapporo (CTS)", lat: 42.7752, lng: 141.6923, count: 1 },
-        { code: "CHC", name: "Christchurch (CHC)", lat: -43.4864, lng: 172.5369, count: 1 },
-        { code: "FOC", name: "Fuzhou (FOC)", lat: 25.9351, lng: 119.6633, count: 1 },
-        { code: "WUH", name: "Wuhan (WUH)", lat: 30.7838, lng: 114.2081, count: 1 },
-        { code: "HGH", name: "Hangzhou (HGH)", lat: 30.2295, lng: 120.4344, count: 1 },
-        { code: "ZRH", name: "Zurich (ZRH)", lat: 47.4582, lng: 8.5555, count: 1 },
-        { code: "MNL", name: "Manila (MNL)", lat: 14.5086, lng: 121.0194, count: 1 },
-        { code: "DFW", name: "Dallas (DFW)", lat: 32.8998, lng: -97.0403, count: 1 },
-        { code: "MAN", name: "Manchester (MAN)", lat: 53.3588, lng: -2.2727, count: 1 },
-        { code: "CGK", name: "Jakarta (CGK)", lat: -6.1275, lng: 106.6557, count: 1 },
-        { code: "BCN", name: "Barcelona (BCN)", lat: 41.2974, lng: 2.0785, count: 1 },
-        { code: "ORD", name: "Chicago (ORD)", lat: 41.9742, lng: -87.9073, count: 1 }
-    ];
-
-    function getColor(count) {
-        return count >= 5 ? '#f43f5e' : count >= 3 ? '#fb923c' : count >= 2 ? '#facc15' : '#38bdf8';
-    }
-    function getWeight(count) {
-        return count >= 5 ? 3.5 : count >= 3 ? 2.5 : count >= 2 ? 1.8 : 1.2;
-    }
-
-    // Place longitudes on the same world copy as HKG so Pacific routes go east.
-    function lngNearHkg(lng) {
-        let x = lng;
-        while (x - HKG_LNG > 180) x -= 360;
-        while (x - HKG_LNG < -180) x += 360;
-        return x;
-    }
-
-    function unwrapFromHkg(coords) {
-        const pts = [];
-        let prev = HKG_LNG;
-        for (const [lng, lat] of coords) {
-            let x = lng;
-            while (x - prev > 180) x -= 360;
-            while (x - prev < -180) x += 360;
-            pts.push([lat, x]);
-            prev = x;
-        }
-        return pts;
-    }
-
-    L.circleMarker([HKG_LAT, HKG_LNG], {
-        radius: 7, fillColor: '#38bdf8', color: '#fff', weight: 2, fillOpacity: 0.95
-    }).addTo(map).bindPopup('<b>Hub: Hong Kong (HKG)</b>');
-
-    const bounds = L.latLngBounds([[HKG_LAT, HKG_LNG]]);
-
-    destinations.forEach(dest => {
-        const gc = turf.greatCircle(
-            turf.point([HKG_LNG, HKG_LAT]),
-            turf.point([dest.lng, dest.lat]),
-            { npoints: 128 }
-        );
-        const latLngs = unwrapFromHkg(gc.geometry.coordinates);
-        L.polyline(latLngs, {
-            color: getColor(dest.count),
-            weight: getWeight(dest.count),
-            opacity: 0.85,
-            lineCap: 'round'
-        }).addTo(map);
-
-        const destLng = lngNearHkg(dest.lng);
-        L.circleMarker([dest.lat, destLng], {
-            radius: dest.count >= 3 ? 6 : 5,
-            fillColor: getColor(dest.count),
-            color: '#0f172a',
-            weight: 1,
-            fillOpacity: 0.9
-        }).addTo(map).bindPopup('<b>' + dest.name + '</b><br>Flights: <b>' + dest.count + '</b>');
-
-        bounds.extend([dest.lat, destLng]);
-    });
-
-    map.fitBounds(bounds, { padding: [36, 36], maxZoom: 3 });
+const SEAM = 150;
+const HKG = { lat: 22.308, lng: 113.9185 };
+function wrap(lng) { return lng - 360 * Math.floor((lng - SEAM + 180) / 360); }
+function xyz(lat, lng) {
+  const p = lat * Math.PI/180, l = lng * Math.PI/180, c = Math.cos(p);
+  return [c*Math.cos(l), c*Math.sin(l), Math.sin(p)];
+}
+function greatCircle(to, n=128) {
+  const a = xyz(HKG.lat, HKG.lng), b = xyz(to.lat, to.lng);
+  const dot = Math.min(1, Math.max(-1, a[0]*b[0]+a[1]*b[1]+a[2]*b[2]));
+  const w = Math.acos(dot), s = Math.sin(w), pts = [];
+  if (w < 1e-8) return [[HKG.lat, wrap(HKG.lng)]];
+  for (let i=0;i<=n;i++) {
+    const t=i/n, s1=Math.sin((1-t)*w)/s, s2=Math.sin(t*w)/s;
+    const x=s1*a[0]+s2*b[0], y=s1*a[1]+s2*b[1], z=s1*a[2]+s2*b[2];
+    const lat = Math.atan2(z, Math.hypot(x,y))*180/Math.PI;
+    const lng = Math.atan2(y,x)*180/Math.PI;
+    pts.push([lat, wrap(lng)]);
+  }
+  return pts;
+}
+function color(n){ return n>=5?'#fb7185':n>=3?'#fb923c':n>=2?'#fbbf24':'#38bdf8'; }
+function weight(n){ return n>=5?3.6:n>=3?2.6:n>=2?2:1.4; }
+const dests = [
+  {code:'JFK',city:'New York',lat:40.6413,lng:-73.7781,count:5},
+  {code:'DEL',city:'Delhi',lat:28.5562,lng:77.1,count:3},
+  {code:'YYZ',city:'Toronto',lat:43.6777,lng:-79.6248,count:3},
+  {code:'SFO',city:'San Francisco',lat:37.6213,lng:-122.379,count:3},
+  {code:'YVR',city:'Vancouver',lat:49.1967,lng:-123.1815,count:2},
+  {code:'MAA',city:'Chennai',lat:12.9941,lng:80.1709,count:2},
+  {code:'TPE',city:'Taipei',lat:25.0797,lng:121.2342,count:2},
+  {code:'MEL',city:'Melbourne',lat:-37.669,lng:144.841,count:1},
+  {code:'PER',city:'Perth',lat:-31.9403,lng:115.9669,count:1},
+  {code:'JNB',city:'Johannesburg',lat:-26.1367,lng:28.2411,count:1},
+  {code:'CTS',city:'Sapporo',lat:42.7752,lng:141.6923,count:1},
+  {code:'CHC',city:'Christchurch',lat:-43.4864,lng:172.5369,count:1},
+  {code:'FOC',city:'Fuzhou',lat:25.9351,lng:119.6633,count:1},
+  {code:'WUH',city:'Wuhan',lat:30.7838,lng:114.2081,count:1},
+  {code:'HGH',city:'Hangzhou',lat:30.2295,lng:120.4344,count:1},
+  {code:'ZRH',city:'Zurich',lat:47.4582,lng:8.5555,count:1},
+  {code:'MNL',city:'Manila',lat:14.5086,lng:121.0194,count:1},
+  {code:'DFW',city:'Dallas',lat:32.8998,lng:-97.0403,count:1},
+  {code:'MAN',city:'Manchester',lat:53.3588,lng:-2.2727,count:1},
+  {code:'CGK',city:'Jakarta',lat:-6.1275,lng:106.6557,count:1},
+  {code:'BCN',city:'Barcelona',lat:41.2974,lng:2.0785,count:1},
+  {code:'ORD',city:'Chicago',lat:41.9742,lng:-87.9073,count:1}
+];
+const mobile = innerWidth < 700;
+const map = L.map('map', {
+  center: [32, 205], zoom: mobile ? 1.55 : 2.35,
+  minZoom: 1, maxZoom: 8, zoomSnap: 0.25, worldCopyJump: false, zoomControl: true, preferCanvas: true
+});
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Tiles © Esri', maxZoom: 16, noWrap: false
+}).addTo(map);
+const hkgLng = wrap(HKG.lng);
+L.circleMarker([HKG.lat, hkgLng], {radius:8,color:'#fff',weight:2,fillColor:'#38bdf8',fillOpacity:1}).addTo(map).bindPopup('<b>HKG</b>');
+L.marker([HKG.lat, hkgLng], {interactive:false, icon: L.divIcon({className:'apt', html:'<span style="color:#7dd3fc">HKG</span>', iconSize:[40,14], iconAnchor:[20,-8]})}).addTo(map);
+dests.forEach(d => {
+  const path = greatCircle(d);
+  const c = color(d.count), w = weight(d.count);
+  L.polyline(path, {color:c, weight:w, opacity:0.9, lineCap:'round'}).addTo(map);
+  const lng = wrap(d.lng);
+  L.circleMarker([d.lat, lng], {radius: d.count>=3?7:5, color:'#0b0e14', weight:1.5, fillColor:c, fillOpacity:1})
+    .addTo(map).bindPopup('<b>'+d.code+'</b> · '+d.city+'<br>'+d.count+' flights');
+  L.marker([d.lat, lng], {interactive:false, icon: L.divIcon({className:'apt', html:'<span style="color:'+c+'">'+d.code+'</span>', iconSize:[44,14], iconAnchor:[22,-7]})}).addTo(map);
+});
 </script>
 </body>
 </html>
