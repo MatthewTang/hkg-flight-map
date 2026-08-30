@@ -1,53 +1,77 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <title>Flight Map from Hong Kong</title>
-    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0e14" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; background: #0b0e14; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; background: #0b0e14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        #map { position: absolute; inset: 0; background: #0b0e14; }
+        .leaflet-container { background: #0b0e14 !important; }
         .map-title {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: max(10px, env(safe-area-inset-top));
+            left: 56px;
+            right: 12px;
             z-index: 1000;
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.88);
             backdrop-filter: blur(8px);
             color: #fff;
-            padding: 15px 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
+        }
+        .map-title h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: #38bdf8; }
+        .map-title p { margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.35; }
+        .legend {
+            position: absolute;
+            bottom: max(28px, env(safe-area-inset-bottom));
+            left: 10px;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.88);
+            color: #cbd5e1;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 11px;
             border: 1px solid rgba(255,255,255,0.1);
         }
-        .map-title h2 { margin: 0 0 5px 0; font-size: 18px; font-weight: 600; color: #38bdf8; }
-        .map-title p { margin: 0; font-size: 12px; color: #94a3b8; }
-        .leaflet-container { background-color: #0d1117 !important; }
+        .legend div { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+        .legend i { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+        .leaflet-control-zoom { margin-left: 10px !important; margin-top: max(10px, env(safe-area-inset-top)) !important; }
+        .leaflet-control-attribution { font-size: 10px !important; }
     </style>
 </head>
 <body>
-
 <div class="map-title">
-    <h2> Flight Route Map (Jan - Sep 2026)</h2>
-    <p>Centered at Hong Kong (HKG) • Line thickness & color show flight frequency</p>
+    <h2>Flight Route Map (Jan–Sep 2026)</h2>
+    <p>HKG hub • thickness &amp; color = frequency</p>
 </div>
-
+<div class="legend">
+    <div><i style="background:#f43f5e;height:4px"></i> 5+ flights</div>
+    <div><i style="background:#fb923c;height:3px"></i> 3–4</div>
+    <div><i style="background:#facc15"></i> 2</div>
+    <div><i style="background:#38bdf8"></i> 1</div>
+</div>
 <div id="map"></div>
-
 <script>
     const map = L.map('map', {
         center: [22.3080, 113.9185],
-        zoom: 3,
-        worldCopyJump: true
+        zoom: 2,
+        minZoom: 2,
+        maxZoom: 8,
+        worldCopyJump: false,
+        zoomControl: true
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri — source: Esri, HERE, Garmin',
+        maxZoom: 16
     }).addTo(map);
 
     const hkgCoord = [113.9185, 22.3080];
@@ -78,46 +102,51 @@
     ];
 
     function getColor(count) {
-        return count >= 5 ? '#f43f5e' :
-               count >= 3 ? '#fb923c' :
-               count >= 2 ? '#facc15' :
-                            '#38bdf8';
+        return count >= 5 ? '#f43f5e' : count >= 3 ? '#fb923c' : count >= 2 ? '#facc15' : '#38bdf8';
     }
-
     function getWeight(count) {
         return count >= 5 ? 3.5 : count >= 3 ? 2.5 : count >= 2 ? 1.8 : 1.2;
     }
 
+    function splitAntimeridian(latLngs) {
+        const parts = [[]];
+        for (let i = 0; i < latLngs.length; i++) {
+            const cur = latLngs[i];
+            const prev = parts[parts.length - 1][parts[parts.length - 1].length - 1];
+            if (prev && Math.abs(cur[1] - prev[1]) > 180) {
+                parts.push([cur]);
+            } else {
+                parts[parts.length - 1].push(cur);
+            }
+        }
+        return parts.filter(p => p.length > 1);
+    }
+
     L.circleMarker([hkgCoord[1], hkgCoord[0]], {
-        radius: 8,
-        fillColor: '#38bdf8',
-        color: '#ffffff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.9
-    }).addTo(map).bindPopup("<b>Hub: Hong Kong (HKG)</b>");
+        radius: 7, fillColor: '#38bdf8', color: '#fff', weight: 2, fillOpacity: 0.95
+    }).addTo(map).bindPopup('<b>Hub: Hong Kong (HKG)</b>');
+
+    const bounds = L.latLngBounds([[hkgCoord[1], hkgCoord[0]]]);
 
     destinations.forEach(dest => {
         const destCoord = [dest.lng, dest.lat];
-        const greatCircle = turf.greatCircle(turf.point(hkgCoord), turf.point(destCoord), { npoints: 100 });
-        const latLngs = greatCircle.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-
-        L.polyline(latLngs, {
-            color: getColor(dest.count),
-            weight: getWeight(dest.count),
-            opacity: 0.75,
-            smoothFactor: 1
-        }).addTo(map);
+        const gc = turf.greatCircle(turf.point(hkgCoord), turf.point(destCoord), { npoints: 128 });
+        const latLngs = gc.geometry.coordinates.map(c => [c[1], c[0]]);
+        const style = { color: getColor(dest.count), weight: getWeight(dest.count), opacity: 0.85, lineCap: 'round' };
+        splitAntimeridian(latLngs).forEach(seg => L.polyline(seg, style).addTo(map));
 
         L.circleMarker([dest.lat, dest.lng], {
-            radius: dest.count >= 5 ? 6 : 4,
+            radius: dest.count >= 3 ? 6 : 5,
             fillColor: getColor(dest.count),
             color: '#0f172a',
             weight: 1,
-            opacity: 1,
-            fillOpacity: 0.85
-        }).addTo(map).bindPopup(`<b>${dest.name}</b><br/>Flight Count: <b>${dest.count} times</b>`);
+            fillOpacity: 0.9
+        }).addTo(map).bindPopup('<b>' + dest.name + '</b><br>Flights: <b>' + dest.count + '</b>');
+
+        bounds.extend([dest.lat, dest.lng]);
     });
+
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 3 });
 </script>
 </body>
 </html>
