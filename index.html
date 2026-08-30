@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Flight Map from Hong Kong</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; background: #0b0e14; }
+        .map-title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            color: #fff;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .map-title h2 { margin: 0 0 5px 0; font-size: 18px; font-weight: 600; color: #38bdf8; }
+        .map-title p { margin: 0; font-size: 12px; color: #94a3b8; }
+        .leaflet-container { background-color: #0d1117 !important; }
+    </style>
+</head>
+<body>
+
+<div class="map-title">
+    <h2> Flight Route Map (Jan - Sep 2026)</h2>
+    <p>Centered at Hong Kong (HKG) • Line thickness & color show flight frequency</p>
+</div>
+
+<div id="map"></div>
+
+<script>
+    const map = L.map('map', {
+        center: [22.3080, 113.9185],
+        zoom: 3,
+        worldCopyJump: true
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+    }).addTo(map);
+
+    const hkgCoord = [113.9185, 22.3080];
+
+    const destinations = [
+        { code: "JFK", name: "New York (JFK)", lat: 40.6413, lng: -73.7781, count: 5 },
+        { code: "DEL", name: "Delhi (DEL)", lat: 28.5562, lng: 77.1000, count: 3 },
+        { code: "YYZ", name: "Toronto (YYZ)", lat: 43.6777, lng: -79.6248, count: 3 },
+        { code: "SFO", name: "San Francisco (SFO)", lat: 37.6213, lng: -122.3790, count: 3 },
+        { code: "YVR", name: "Vancouver (YVR)", lat: 49.1967, lng: -123.1815, count: 2 },
+        { code: "MAA", name: "Chennai (MAA)", lat: 12.9941, lng: 80.1709, count: 2 },
+        { code: "TPE", name: "Taipei (TPE)", lat: 25.0797, lng: 121.2342, count: 2 },
+        { code: "MEL", name: "Melbourne (MEL)", lat: -37.6690, lng: 144.8410, count: 1 },
+        { code: "PER", name: "Perth (PER)", lat: -31.9403, lng: 115.9669, count: 1 },
+        { code: "JNB", name: "Johannesburg (JNB)", lat: -26.1367, lng: 28.2411, count: 1 },
+        { code: "CTS", name: "Sapporo (CTS)", lat: 42.7752, lng: 141.6923, count: 1 },
+        { code: "CHC", name: "Christchurch (CHC)", lat: -43.4864, lng: 172.5369, count: 1 },
+        { code: "FOC", name: "Fuzhou (FOC)", lat: 25.9351, lng: 119.6633, count: 1 },
+        { code: "WUH", name: "Wuhan (WUH)", lat: 30.7838, lng: 114.2081, count: 1 },
+        { code: "HGH", name: "Hangzhou (HGH)", lat: 30.2295, lng: 120.4344, count: 1 },
+        { code: "ZRH", name: "Zurich (ZRH)", lat: 47.4582, lng: 8.5555, count: 1 },
+        { code: "MNL", name: "Manila (MNL)", lat: 14.5086, lng: 121.0194, count: 1 },
+        { code: "DFW", name: "Dallas (DFW)", lat: 32.8998, lng: -97.0403, count: 1 },
+        { code: "MAN", name: "Manchester (MAN)", lat: 53.3588, lng: -2.2727, count: 1 },
+        { code: "CGK", name: "Jakarta (CGK)", lat: -6.1275, lng: 106.6557, count: 1 },
+        { code: "BCN", name: "Barcelona (BCN)", lat: 41.2974, lng: 2.0785, count: 1 },
+        { code: "ORD", name: "Chicago (ORD)", lat: 41.9742, lng: -87.9073, count: 1 }
+    ];
+
+    function getColor(count) {
+        return count >= 5 ? '#f43f5e' :
+               count >= 3 ? '#fb923c' :
+               count >= 2 ? '#facc15' :
+                            '#38bdf8';
+    }
+
+    function getWeight(count) {
+        return count >= 5 ? 3.5 : count >= 3 ? 2.5 : count >= 2 ? 1.8 : 1.2;
+    }
+
+    L.circleMarker([hkgCoord[1], hkgCoord[0]], {
+        radius: 8,
+        fillColor: '#38bdf8',
+        color: '#ffffff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9
+    }).addTo(map).bindPopup("<b>Hub: Hong Kong (HKG)</b>");
+
+    destinations.forEach(dest => {
+        const destCoord = [dest.lng, dest.lat];
+        const greatCircle = turf.greatCircle(turf.point(hkgCoord), turf.point(destCoord), { npoints: 100 });
+        const latLngs = greatCircle.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+        L.polyline(latLngs, {
+            color: getColor(dest.count),
+            weight: getWeight(dest.count),
+            opacity: 0.75,
+            smoothFactor: 1
+        }).addTo(map);
+
+        L.circleMarker([dest.lat, dest.lng], {
+            radius: dest.count >= 5 ? 6 : 4,
+            fillColor: getColor(dest.count),
+            color: '#0f172a',
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.85
+        }).addTo(map).bindPopup(`<b>${dest.name}</b><br/>Flight Count: <b>${dest.count} times</b>`);
+    });
+</script>
+</body>
+</html>
