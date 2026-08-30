@@ -60,21 +60,22 @@
 </div>
 <div id="map"></div>
 <script>
+    const HKG_LNG = 113.9185;
+    const HKG_LAT = 22.3080;
+
     const map = L.map('map', {
-        center: [22.3080, 113.9185],
-        zoom: 2,
+        center: [HKG_LAT, HKG_LNG],
+        zoom: 3,
         minZoom: 2,
         maxZoom: 8,
-        worldCopyJump: false,
-        zoomControl: true
+        worldCopyJump: false
     });
 
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles © Esri — source: Esri, HERE, Garmin',
-        maxZoom: 16
+        maxZoom: 16,
+        noWrap: false
     }).addTo(map);
-
-    const hkgCoord = [113.9185, 22.3080];
 
     const destinations = [
         { code: "JFK", name: "New York (JFK)", lat: 40.6413, lng: -73.7781, count: 5 },
@@ -108,34 +109,49 @@
         return count >= 5 ? 3.5 : count >= 3 ? 2.5 : count >= 2 ? 1.8 : 1.2;
     }
 
-    function splitAntimeridian(latLngs) {
-        const parts = [[]];
-        for (let i = 0; i < latLngs.length; i++) {
-            const cur = latLngs[i];
-            const prev = parts[parts.length - 1][parts[parts.length - 1].length - 1];
-            if (prev && Math.abs(cur[1] - prev[1]) > 180) {
-                parts.push([cur]);
-            } else {
-                parts[parts.length - 1].push(cur);
-            }
-        }
-        return parts.filter(p => p.length > 1);
+    // Place longitudes on the same world copy as HKG so Pacific routes go east.
+    function lngNearHkg(lng) {
+        let x = lng;
+        while (x - HKG_LNG > 180) x -= 360;
+        while (x - HKG_LNG < -180) x += 360;
+        return x;
     }
 
-    L.circleMarker([hkgCoord[1], hkgCoord[0]], {
+    function unwrapFromHkg(coords) {
+        const pts = [];
+        let prev = HKG_LNG;
+        for (const [lng, lat] of coords) {
+            let x = lng;
+            while (x - prev > 180) x -= 360;
+            while (x - prev < -180) x += 360;
+            pts.push([lat, x]);
+            prev = x;
+        }
+        return pts;
+    }
+
+    L.circleMarker([HKG_LAT, HKG_LNG], {
         radius: 7, fillColor: '#38bdf8', color: '#fff', weight: 2, fillOpacity: 0.95
     }).addTo(map).bindPopup('<b>Hub: Hong Kong (HKG)</b>');
 
-    const bounds = L.latLngBounds([[hkgCoord[1], hkgCoord[0]]]);
+    const bounds = L.latLngBounds([[HKG_LAT, HKG_LNG]]);
 
     destinations.forEach(dest => {
-        const destCoord = [dest.lng, dest.lat];
-        const gc = turf.greatCircle(turf.point(hkgCoord), turf.point(destCoord), { npoints: 128 });
-        const latLngs = gc.geometry.coordinates.map(c => [c[1], c[0]]);
-        const style = { color: getColor(dest.count), weight: getWeight(dest.count), opacity: 0.85, lineCap: 'round' };
-        splitAntimeridian(latLngs).forEach(seg => L.polyline(seg, style).addTo(map));
+        const gc = turf.greatCircle(
+            turf.point([HKG_LNG, HKG_LAT]),
+            turf.point([dest.lng, dest.lat]),
+            { npoints: 128 }
+        );
+        const latLngs = unwrapFromHkg(gc.geometry.coordinates);
+        L.polyline(latLngs, {
+            color: getColor(dest.count),
+            weight: getWeight(dest.count),
+            opacity: 0.85,
+            lineCap: 'round'
+        }).addTo(map);
 
-        L.circleMarker([dest.lat, dest.lng], {
+        const destLng = lngNearHkg(dest.lng);
+        L.circleMarker([dest.lat, destLng], {
             radius: dest.count >= 3 ? 6 : 5,
             fillColor: getColor(dest.count),
             color: '#0f172a',
@@ -143,10 +159,10 @@
             fillOpacity: 0.9
         }).addTo(map).bindPopup('<b>' + dest.name + '</b><br>Flights: <b>' + dest.count + '</b>');
 
-        bounds.extend([dest.lat, dest.lng]);
+        bounds.extend([dest.lat, destLng]);
     });
 
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 3 });
+    map.fitBounds(bounds, { padding: [36, 36], maxZoom: 3 });
 </script>
 </body>
 </html>
